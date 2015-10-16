@@ -80,6 +80,7 @@ if('undefined' != typeof(global)) frame_time = 45; //on server we run at 45ms, 2
         if(!this.server) {
                 //Create a keyboard handler
             this.keyboard = new THREEx.KeyboardState();
+            this.mouse = new THREEx.MouseState();
                 //Create the default configuration settings
             this.client_create_configuration();
                 //A list of recent server updates we interpolate across
@@ -129,6 +130,17 @@ game_core.prototype.lerp = function(p, n, t) { var _t = Number(t); _t = (Math.ma
     //Simple linear interpolation between 2 vectors
 game_core.prototype.v_lerp = function(v,tv,t) { return { x: this.lerp(v.x, tv.x, t), y:this.lerp(v.y, tv.y, t) }; };
 
+game_core.prototype.get_rotation = function(from, to)
+{
+  var angle = Math.atan2(to.x - from.x, to.y - from.y) * 180/ Math.PI;
+  if(angle < 0)
+  {
+    angle+= 360;
+  }
+  console.log("rotatioN: " + angle);
+  return angle;
+}
+
 /*
     The player class
 
@@ -173,9 +185,9 @@ game_core.prototype.v_lerp = function(v,tv,t) { return { x: this.lerp(v.x, tv.x,
         var centerY = y+ this.size.hy;
 
         game.ctx.save();
-        //game.ctx.translate(centerX, centerY);
-        //game.ctx.rotate(-(this.rotation - 180) * Math.PI / 180);
-        //game.ctx.translate(-centerX, -centerY);
+        game.ctx.translate(centerX, centerY);
+        game.ctx.rotate(-(this.rotation - 180) * Math.PI / 180);
+        game.ctx.translate(-centerX, -centerY);
         game.ctx.beginPath();
         game.ctx.rect(x,y,this.size.hx *2,this.size.hy * 2);
         //draw a gun type thing to mark rotation
@@ -243,6 +255,8 @@ game_core.prototype.process_input = function( player ) {
     //so we process each one
     var x_dir = 0;
     var y_dir = 0;
+    var mX, mY;
+    var rotation = 0;
     var ic = player.inputs.length;
     if(ic) {
         for(var j = 0; j < ic; ++j) {
@@ -253,6 +267,7 @@ game_core.prototype.process_input = function( player ) {
             var c = input.length;
             for(var i = 0; i < c; ++i) {
                 var key = input[i];
+                var parts = key.split('-');
                 if(key == 'l') {
                     x_dir -= 1;
                 }
@@ -265,12 +280,18 @@ game_core.prototype.process_input = function( player ) {
                 if(key == 'u') {
                     y_dir -= 1;
                 }
+                if(parts[0] == 'm'){ // mouse move
+                  mX = parseFloat(parts[1]);
+                  mY = parseFloat(parts[2]);
+                }
             }
         }
     }
 
         //we have a direction vector now, so apply the same physics as the client
     var resulting_vector = this.physics_movement_vector_from_direction(x_dir,y_dir);
+    resulting_vector.lookingAt = {x:mX, y:mY};
+
     if(player.inputs.length) {
         //we can now clear the array since these have been processed
         player.last_input_time = player.inputs[ic-1].time;
@@ -320,6 +341,8 @@ game_core.prototype.server_update_physics = function() {
       player.old_state.pos = this.pos( player.pos );
       var other_new_dir = this.process_input(player);
       player.pos = this.v_add( player.old_state.pos, other_new_dir);
+      if(other_new_dir.lookingAt.x !== undefined) //update rotation
+        player.rotation = this.get_rotation(player.pos, other_new_dir.lookingAt)
       player.inputs = [];
     }
 
@@ -411,7 +434,15 @@ game_core.prototype.client_handle_input = function(){
             input.push('u');
 
         } //up
-
+    if(this.mouse.moved() && this.viewport.map_corner !== undefined){
+      var mPos = this.mouse.position();
+      var rect = this.viewport.getBoundingClientRect();
+      var viewportPos = {x:mPos.x - rect.left, y:mPos.y - rect.top};
+      //translate viewport position to map position and we'll be all good
+      mPos.x = viewportPos.x - this.viewport.map_corner.x;
+      mPos.y = viewportPos.y - this.viewport.map_corner.y;
+      input.push('m-' +mPos.x + '-' + mPos.y);
+    }
     if(input.length) {
 
             //Update what sequence we are on now
@@ -635,6 +666,7 @@ game_core.prototype.client_update_local_position = function(){
 
         //Make sure the visual position matches the states we have stored
         this.localPlayer.pos = this.localPlayer.cur_state.pos;
+        this.localPlayer.rotation = this.localPlayer.cur_state.rotation;
 
         var centerX = this.localPlayer.pos.x+this.localPlayer.size.hx;
         var centerY = this.localPlayer.pos.y+this.localPlayer.size.hy;
@@ -651,9 +683,12 @@ game_core.prototype.client_update_physics = function() {
         this.localPlayer.old_state.pos = this.pos( this.localPlayer.cur_state.pos );
         var nd = this.process_input(this.localPlayer);
         this.localPlayer.cur_state.pos = this.v_add( this.localPlayer.old_state.pos, nd);
+        if(nd.lookingAt.x !== undefined) //update rotation
+        {
+          this.localPlayer.cur_state.rotation = this.get_rotation(this.localPlayer.cur_state.pos, nd.lookingAt)
+        }
         this.localPlayer.state_time = this.local_time;
     }
-
 };
 
 game_core.prototype.client_update = function() {
