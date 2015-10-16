@@ -9,7 +9,7 @@
 */
 
     var
-        gameport        = process.env.PORT || 4004,
+        gameport        = process.env.PORT || 3000,
 
         io              = require('socket.io'),
         express         = require('express'),
@@ -92,7 +92,7 @@
             //5b2ca132-64bd-4513-99da-90e838ca47d1
             //and store this on their socket/connection
         client.userid = UUID();
-        game.gamecore.addPlayer(client);
+        game.gamecore.server_addPlayer(client);
 
         game.active = true;
             //tell the player they connected, giving them their id and current players
