@@ -137,7 +137,7 @@ game_core.prototype.get_rotation = function(from, to)
   {
     angle+= 360;
   }
-  console.log("rotatioN: " + angle);
+  console.log("rotation of points: "+ from.x +", " + from.y + " - " + to.x + "," + to.y);
   return angle;
 }
 
@@ -267,7 +267,7 @@ game_core.prototype.process_input = function( player ) {
             var c = input.length;
             for(var i = 0; i < c; ++i) {
                 var key = input[i];
-                var parts = key.split('-');
+                var parts = key.split('+');
                 if(key == 'l') {
                     x_dir -= 1;
                 }
@@ -441,7 +441,7 @@ game_core.prototype.client_handle_input = function(){
       //translate viewport position to map position and we'll be all good
       mPos.x = viewportPos.x - this.viewport.map_corner.x;
       mPos.y = viewportPos.y - this.viewport.map_corner.y;
-      input.push('m-' +mPos.x + '-' + mPos.y);
+      input.push('m+' +mPos.x + '+' + mPos.y);
     }
     if(input.length) {
 
