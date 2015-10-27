@@ -15,7 +15,6 @@
 
     // requestAnimationFrame polyfill by Erik Möller
     // fixes from Paul Irish and Tino Zijdel
-
 var frame_time = 60/1000; // run the local game at 16ms/ 60hz
 if('undefined' != typeof(global)) frame_time = 45; //on server we run at 45ms, 22hz
 
@@ -56,8 +55,6 @@ if('undefined' != typeof(global)) frame_time = 45; //on server we run at 45ms, 2
 
         this.players =  {};
         this.ghosts = {};
-        //The speed at which the clients move.
-        this.playerspeed = 120;
 
         //Set up some physics integration values
         this._pdt = 0.0001;                 //The physics update delta time
@@ -95,6 +92,57 @@ if('undefined' != typeof(global)) frame_time = 45; //on server we run at 45ms, 2
         }
     };
 
+    var game_player = function( game) {
+            //Set up initial values for our state information
+        this.pos = { x:(50 + (game.world.width - 50) * Math.random()), y:(50 + (game.world.height - 50) * Math.random()) };
+        this.size = { x:16, y:16, hx:8, hy:8 };
+        this.state = 'not-connected';
+        this.color = 'rgba(255,255,255,0.1)';
+        this.info_color = 'rgba(255,255,255,0.1)';
+        this.id = '';
+
+        //These are used in moving us around later
+        this.old_state = {pos:{x:0,y:0}};
+        this.cur_state = {pos:{x:0,y:0}};
+        this.state_time = new Date().getTime();
+
+        //Our local history of inputs
+        this.inputs = [];
+
+        //The world bounds we are confined to
+        this.pos_limits = {
+            x_min: this.size.hx,
+            x_max: game.world.width - this.size.hx,
+            y_min: this.size.hy,
+            y_max: game.world.height - this.size.hy
+        };
+
+        this.speed = 400;
+
+    };
+
+    game_player.prototype.draw = function(){
+        if(!game.viewport.map_corner || game.viewport.map_corner == null)
+          return;
+        var x = this.pos.x - game.viewport.map_corner.x;
+        var y = this.pos.y - game.viewport.map_corner.y;
+
+        var centerX = x+ this.size.hx;
+        var centerY = y+ this.size.hy;
+
+        game.ctx.save();
+        game.ctx.translate(centerX, centerY);
+        game.ctx.rotate(-(this.rotation - 180) * Math.PI / 180);
+        game.ctx.translate(-centerX, -centerY);
+        game.ctx.beginPath();
+        game.ctx.rect(x,y,this.size.hx *2,this.size.hy * 2);
+        //draw a gun type thing to mark rotation
+        game.ctx.rect(centerX - 3, y-3, 6, 3);
+        game.ctx.stroke();
+        game.ctx.closePath();
+        game.ctx.restore();
+    };
+
 //server side we set the 'game_core' class to a global type, so that it can use it anywhere.
 if( 'undefined' != typeof global ) {
     module.exports = global.game_core = game_core;
@@ -127,56 +175,6 @@ game_core.prototype.get_rotation = function(from, to)
   //console.log("rotation of points: "+ from.x +", " + from.y + " - " + to.x + "," + to.y);
   return angle;
 }
-
-    var game_player = function( game) {
-            //Set up initial values for our state information
-        this.pos = { x:(50 + (game.world.width - 50) * Math.random()), y:(50 + (game.world.height - 50) * Math.random()) };
-        this.size = { x:16, y:16, hx:8, hy:8 };
-        this.state = 'not-connected';
-        this.color = 'rgba(255,255,255,0.1)';
-        this.info_color = 'rgba(255,255,255,0.1)';
-        this.id = '';
-
-        //These are used in moving us around later
-        this.old_state = {pos:{x:0,y:0}};
-        this.cur_state = {pos:{x:0,y:0}};
-        this.state_time = new Date().getTime();
-
-        //Our local history of inputs
-        this.inputs = [];
-
-        //The world bounds we are confined to
-        this.pos_limits = {
-            x_min: this.size.hx,
-            x_max: game.world.width - this.size.hx,
-            y_min: this.size.hy,
-            y_max: game.world.height - this.size.hy
-        };
-
-    };
-
-    game_player.prototype.draw = function(){
-        if(!game.viewport.map_corner || game.viewport.map_corner == null)
-          return;
-        var x = this.pos.x - game.viewport.map_corner.x;
-        var y = this.pos.y - game.viewport.map_corner.y;
-
-        var centerX = x+ this.size.hx;
-        var centerY = y+ this.size.hy;
-
-        game.ctx.save();
-        game.ctx.translate(centerX, centerY);
-        game.ctx.rotate(-(this.rotation - 180) * Math.PI / 180);
-        game.ctx.translate(-centerX, -centerY);
-        game.ctx.beginPath();
-        game.ctx.rect(x,y,this.size.hx *2,this.size.hy * 2);
-        //draw a gun type thing to mark rotation
-        game.ctx.rect(centerX - 3, y-3, 6, 3);
-        game.ctx.stroke();
-        game.ctx.closePath();
-        game.ctx.restore();
-
-    };
 
 game_core.prototype.update = function(t) {
 
@@ -253,7 +251,7 @@ game_core.prototype.process_input = function( player ) {
         }
     }
     //we have a direction vector now, so apply the same physics as the client
-    var resulting_vector = this.physics_movement_vector_from_direction(x_dir,y_dir);
+    var resulting_vector = this.physics_movement_vector_from_direction(x_dir,y_dir, player.speed);
     resulting_vector.lookingAt = {x:mX, y:mY};
 
     if(player.inputs.length) {
@@ -264,23 +262,21 @@ game_core.prototype.process_input = function( player ) {
     return resulting_vector;
 };
 
-game_core.prototype.physics_movement_vector_from_direction = function(x,y) {
+game_core.prototype.physics_movement_vector_from_direction = function(x, y, speed) {
         //Must be fixed step, at physics sync speed.
     return {
-        x : (x * (this.playerspeed * 0.015)).fixed(3),
-        y : (y * (this.playerspeed * 0.015)).fixed(3)
+        x : (x * (speed * 0.015)).fixed(3),
+        y : (y * (speed * 0.015)).fixed(3)
     };
 
 }; //game_core.physics_movement_vector_from_direction
 
 game_core.prototype.update_physics = function() {
-
     if(this.server) {
         this.server_update_physics();
     } else {
         this.client_update_physics();
     }
-
 };
 
 game_core.prototype.server_addPlayer = function(socket){
@@ -306,18 +302,13 @@ game_core.prototype.server_update_physics = function() {
       this.check_collision(player);
     }
 
-}; //game_core.server_update_physics
+};
 
-    //Makes sure things run smoothly and notifies clients of changes
-    //on the server side
 game_core.prototype.server_update = function(){
-        //Update the state of our local clock to match the timer
     this.server_time = this.local_time;
-    //Make a snapshot of the current state, for updating the clients
     var positions = {};
     var inputs = {};
     var rotations = {};
-
     for(var playerKey in this.players){
       positions[playerKey] = this.players[playerKey].pos;
       inputs[playerKey] = this.players[playerKey].last_input_seq;
@@ -333,8 +324,7 @@ game_core.prototype.server_update = function(){
     for(var playerKey in this.players){
       this.players[playerKey].instance.emit( 'onserverupdate', this.laststate );
     }
-}; //game_core.server_update
-
+};
 
 game_core.prototype.handle_server_input = function(client, input, input_time, input_seq) {
    this.players[client.userid].inputs.push({inputs:input, time:input_time, seq:input_seq});
@@ -483,7 +473,7 @@ game_core.prototype.client_process_net_updates = function() {
     //searching throught the server_updates array for current_time in between 2 other times.
     // Then :  other player position = lerp ( past_pos, target_pos, current_time );
 
-        //Find the position in the timeline of updates we stored.
+    //Find the position in the timeline of updates we stored.
     var current_time = this.client_time;
     var count = this.server_updates.length-1;
     var target = null;
@@ -535,9 +525,7 @@ game_core.prototype.client_process_net_updates = function() {
           if(playerKey == this.localPlayer.id)
             continue;
           var player = this.players[playerKey];
-
           var other_server_pos = latest_server_data.p[playerKey];
-
           //The other players positions in this timeline, behind us and in front of us
           var other_target_pos = target.p[playerKey];
           var other_past_pos = previous.p[playerKey];
@@ -555,9 +543,7 @@ game_core.prototype.client_process_net_updates = function() {
           }
           player.rotation = rotation;
         }
-
     }
-
 };
 
 game_core.prototype.client_onserverupdate_recieved = function(data){
@@ -566,27 +552,12 @@ game_core.prototype.client_onserverupdate_recieved = function(data){
         this.server_time = data.t;
         //Update our local offset time from the last server update
         this.client_time = this.server_time - (this.net_offset/1000);
-        //One approach is to set the position directly as the server tells you.
-        //This is a common mistake and causes somewhat playable results on a local LAN, for example,
-        //but causes terrible lag when any ping/latency is introduced. The player can not deduce any
-        //information to interpolate with so it misses positions, and packet loss destroys this approach
-        //even more so. See 'the bouncing ball problem' on Wikipedia.
-        //Cache the data from the server,
-        //and then play the timeline
-        //back to the player with a small delay (net_offset), allowing
-        //interpolation between the points.
-        console.log("got data:")
-        console.log(data);
         this.server_updates.push(data);
             //we limit the buffer in seconds worth of updates
             //60fps*buffer seconds = number of samples
         if(this.server_updates.length >= ( 60*this.buffer_size )) {
             this.server_updates.splice(0,1);
         }
-            //We can see when the last tick we know of happened.
-            //If client_time gets behind this due to latency, a snap occurs
-            //to the last tick. Unavoidable, and a reallly bad connection here.
-            //If that happens it might be best to drop the game after a period of time.
         this.oldest_tick = this.server_updates[0].t;
             //Handle the latest positions from the server
             //and make sure to correct our local predictions, making the server have final say.
@@ -721,8 +692,12 @@ game_core.prototype.client_create_configuration = function() {
 game_core.prototype.client_playerJoined = function(data){
   this.players[data.id] = new game_player(this);
   this.players[data.id].pos = data.pos;
+  this.players[data.id].speed = data.speed;
+  this.players[data.id].rotation = data.rotation;
   this.ghosts[data.id] = new game_player(this);
   this.ghosts[data.id].pos = data.pos;
+  this.players[data.id].speed = data.speed;
+  this.players[data.id].rotation = data.rotation;
 }
 
 game_core.prototype.client_connect_to_server = function() {
@@ -779,7 +754,7 @@ game_core.prototype.server_getCurrentPlayers = function(){
   var currentPlayers = {};
   for(var playerKey in this.players){
     var player = this.players[playerKey];
-    currentPlayers[playerKey] = {pos:player.pos};
+    currentPlayers[playerKey] = {pos:player.pos, rotation:player.rotation, speed:player.speed};
   }
   return currentPlayers;
 }
