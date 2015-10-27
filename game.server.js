@@ -39,7 +39,7 @@
 
     game_server.onMessage = function(client,message) {
 
-        if(this.fake_latency && message.split('.')[0].substr(0,1) == 'i') {
+        if(this.fake_latency && message.split('_')[0].substr(0,1) == 'i') {
 
                 //store all input message
             game_server.messages.push({client:client, message:message});
@@ -59,7 +59,7 @@
     game_server._onMessage = function(client,message) {
 
             //Cut the message up into sub components
-        var message_parts = message.split('.');
+        var message_parts = message.split('_');
             //The first is always the type of message
         var message_type = message_parts[0];
 
@@ -75,11 +75,11 @@
     }; //game_server.onMessage
 
     game_server.onInput = function(client, parts) {
-            //The input commands come in like u-l,
+            //The input commands come in like u#l,
             //so we split them up into separate commands,
             //and then update the players
-        var input_commands = parts[1].split('-');
-        var input_time = parts[2].replace('-','.');
+        var input_commands = parts[1].split('#');
+        var input_time = parts[2].replace('-','_');
         var input_seq = parts[3];
 
             //the client should be in a game, so
@@ -88,27 +88,13 @@
             this.game.gamecore.handle_server_input(client, input_commands, input_time, input_seq);
         }
 
-    }; //game_server.onInput
-
-        //Define some required functions
+    };
     game_server.createGame = function() {
-
-            //Create a new game instance
         var thegame = {
                 id : UUID(),                //generate a new id for the game
             };
-            //Create a new game core instance, this actually runs the
-            //game code like collisions and such.
         thegame.gamecore = new game_core( thegame );
-            //Start updating the game loop on the server
         thegame.gamecore.update( new Date().getTime() );
-            //tell the player that they are now the host
-            //s=server message, h=you are hosting
-        //player.send('s.h.'+ String(thegame.gamecore.local_time).replace('.','-'));
-        //console.log('server host at  ' + thegame.gamecore.local_time);
-        //player.game = thegame;
-        //player.hosting = true;
-            //return it
         this.game = thegame;
         return thegame;
 

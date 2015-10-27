@@ -18,6 +18,8 @@ window.onload = function(){
 
 			//Fetch the viewport
 		game.viewport = document.getElementById('viewport');
+		game.viewport.offset_top = game.viewport.offsetTop;
+		game.viewport.offset_left = game.viewport.offsetLeft;
 
 			//Adjust their size
 		//game.viewport.width = game.world.width;
