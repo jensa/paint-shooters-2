@@ -1,37 +1,11 @@
-/*  Copyright (c) 2012 Sven "FuzzYspo0N" Bergström
-
-    written by : http://underscorediscovery.com
-    written for : http://buildnewgames.com/real-time-multiplayer/
-
-    MIT Licensed.
-*/
-
-	//A window global for our game root variable.
 var game = {};
-
-	//When loading, we store references to our
-	//drawing canvases, and initiate a game instance.
+require('./game.core.js');
 window.onload = function(){
-
-		//Create our game client instance.
-	game = new game_core();
-
-			//Fetch the viewport
-		game.viewport = document.getElementById('viewport');
-		game.viewport.offset_top = game.viewport.offsetTop;
-		game.viewport.offset_left = game.viewport.offsetLeft;
-
-			//Adjust their size
-		//game.viewport.width = game.world.width;
-		//game.viewport.height = game.world.height;
-
-			//Fetch the rendering contexts
-		game.ctx = game.viewport.getContext('2d');
-
-			//Set the draw style for the font
-		game.ctx.font = '11px "Helvetica"';
-
-		//Finally, start the loop
+	game = new GameCore();
+	game.viewport = document.getElementById('viewport');
+	game.viewport.offset_top = game.viewport.offsetTop;
+	game.viewport.offset_left = game.viewport.offsetLeft;
+	game.ctx = game.viewport.getContext('2d');
+	game.ctx.font = '11px "Helvetica"';
 	game.update( new Date().getTime() );
-
-}; //window.onload
+};
